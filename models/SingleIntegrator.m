@@ -11,15 +11,15 @@ classdef SingleIntegrator < handle
         dt = 0.05; % Time step
         
         saturate_inputs = false; % Wether the inputs are saturated or not
-        input_max = []; % Max input value
-        input_min = []; % Min input value
+        v_lim = []; % Max/Min speed
+        a_max = []; % Max x,y accel
         flagInputSaturated = false; % Saturation of the command
         flagInputSet = false; %
     end
 
     methods
         % Constructor
-        function this = SingleIntegrator(N, state_ini, input_ini, input_min_, input_max_, dt_)
+        function this = SingleIntegrator(N, state_ini, input_ini, v_lim_, a_max_, dt_)
             % Initialize state
             if(~exist("state_ini","var") || isempty(state_ini))
                 this.state = zeros(N,1);
@@ -40,16 +40,16 @@ classdef SingleIntegrator < handle
                     this.input = input_ini;
                 end
             end
-            % Initialize saturations on the input
-            if(~exist("input_max_","var") && ~exist("input_min_","var") || isempty(input_max_) && isempty(input_min_)) % No saturations specified
+            % Initialize saturations on the speed
+            if(~exist("v_lim_","var") && ~exist("a_max_","var") || isempty(v_lim_) && isempty(a_max_)) % No saturations specified
                 this.saturate_inputs = false;
-            elseif(exist("input_max_","var") && exist("input_min_","var"))
-                if(size(input_max_,1) ~= N || size(input_min_,1) ~= N) % Saturations specified but not the right dims
+            elseif(exist("v_lim_","var") && exist("a_max_","var"))
+                if(size(v_lim_,1) ~= 2 || size(a_max_,1) ~= N) % Saturations specified but not the right dims
                     error("SingleIntegrator.SingleIntegrator : "+"Wrong dimensions");
                 else % Saturations specified with the right dims
                     this.saturate_inputs = true;
-                    this.input_min = input_min_;
-                    this.input_max = input_max_;
+                    this.v_lim = v_lim_;
+                    this.a_max = a_max_;
                 end
             else % Not all saturations specified
                 error("SingleIntegrator.SingleIntegrator : "+"Missing parameter");
@@ -78,8 +78,21 @@ classdef SingleIntegrator < handle
 
             % Validate the inputs
             if(this.saturate_inputs)
-                if(any(this.input > this.input_max) || any(this.input < this.input_min))
-                    this.input = max(min(this.input, this.input_max), this.input_min);
+                % Speed saturation
+                if(norm(this.input) > this.v_lim(2))
+                    delta = this.v_lim(2)./norm(this.input);
+                    this.input = this.input.*delta;
+                    this.flagInputSaturated = true;
+                end
+                % Acceleration x saturation
+                if(any(abs(this.input-this.input_pre)/this.dt > this.a_max))
+                    accSign = sign(this.input-this.input_pre);
+                    this.input = accSign.*this.a_max*this.dt + this.input_pre;
+                end
+                % Speed saturation
+                if(norm(this.input) > this.v_lim(2))
+                    delta = this.v_lim(2)./norm(this.input);
+                    this.input = this.input.*delta;
                     this.flagInputSaturated = true;
                 end
             end

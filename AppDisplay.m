@@ -11,7 +11,7 @@ classdef AppDisplay < matlab.apps.AppBase
 
     properties (Constant)
         marginX = 50;
-        marginY = 130;
+        marginY = 50; %130
     end
 
     % Component initialization
@@ -23,6 +23,7 @@ classdef AppDisplay < matlab.apps.AppBase
             % Create UIFigure and hide until all components are created
             app.UIFigure = uifigure('Visible', 'off');
             app.UIFigure.Position = [0 0 1680 1024];
+            %app.UIFigure.Position = [0 0 1350 750];
             app.UIFigure.Name = 'Simulator Vxx';
             app.UIFigure.WindowState = 'maximized';
             app.middle = app.UIFigure.Position(3:4)/2 + [165 0];
@@ -43,15 +44,15 @@ classdef AppDisplay < matlab.apps.AppBase
 
             % Create plotAxis1
             app.plotAxis1 = axes(app.UIFigure);
-            title(app.plotAxis1, 'Commands');
+            title(app.plotAxis1, 'Interdistances');
             xlabel(app.plotAxis1, 'Time (s)');
             ylabel(app.plotAxis1, 'Data ()');
             %zlabel(app.plotAxis1, 'Z (m)');
             app.plotAxis1.Units = "pixels";
             app.plotAxis1.Position = [app.middle(1)+1/2*app.marginX app.middle(2)+app.marginX (app.UIFigure.Position(3)-app.middle(1))-app.marginX (app.UIFigure.Position(4)-app.middle(2))-2.25*app.marginX]; %[790 410 550 290];
             axis(app.plotAxis1, "manual");
-            app.plotAxis1.XLim = [-0.5 2.5];
-            app.plotAxis1.YLim = [-3 10];
+            app.plotAxis1.XLim = [0 2.5];
+            app.plotAxis1.YLim = [-10 10];
             hold(app.plotAxis1, "on");
 
             % Create plotAxis2
@@ -99,8 +100,14 @@ classdef AppDisplay < matlab.apps.AppBase
         function clearAll(app)
             
             cla(app.mainAxis);
+            app.mainAxis.XLim = [-20 20];
+            app.mainAxis.YLim = [-20 20];
             cla(app.plotAxis1);
+            app.plotAxis1.XLim = [0 2.5];
+            app.plotAxis1.YLim = [-10 10];
             cla(app.plotAxis1);
+            axis(app.plotAxis2, "auto y");
+            app.plotAxis2.XLim = [-0.5 2.5];
         end
     end
 end

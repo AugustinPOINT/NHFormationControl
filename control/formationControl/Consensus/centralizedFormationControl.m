@@ -1,22 +1,25 @@
-function controls = centralizedFormationControl(poses, topology)
+function [controls, actualL] = centralizedFormationControl(poses, L, u)
     % Computes commands for a group of N robots in a centralized way
     %
     
     N = size(poses,2);
-    %% Define the formation
-    d1 = 0.75;
-    L = topology;
-
+    
     %% Compute the robots controls
-    gain = 2;
+    gmax = 10;
+    gmin = 1;
+    
     controls(:,:) = zeros(size(poses));
     
+    actualL = L;
     for i = 2:N
         controls(:, i) = [0; 0];
         neighbors = topologicalNeighbors(L, i);
         for j = neighbors
-            controls(:, i) = controls(:, i) + ...
-                gain*(norm(poses(1:2, j) - poses(1:2, i))^2 -  L(i,j)^2)*(poses(1:2, j) - poses(1:2, i));
+            dij = norm(poses(1:2, j) - poses(1:2, i));
+            gain = sin(atan(abs(dij^2 - L(i,j)^2)/5))*(gmax-gmin)+(gmax-(gmax-gmin));
+            controls(:, i) = controls(:, i) + gain * (dij^2 - L(i,j)^2) * (poses(1:2, j) - poses(1:2, i))/dij;
+            actualL(i,j) = -dij;
+            actualL(j,i) = -dij;
         end
     end
     

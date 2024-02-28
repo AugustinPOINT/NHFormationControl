@@ -36,7 +36,7 @@ topology = L;
 % Trajectories
 trajectories = cell(N,1);
 for r = 1:N
-    trajectories{r} = zeros(2,n);
+    trajectories{r} = zeros(2,iterations);
 end
 % Interdistances
 ndist = N*(N-1)/2;
@@ -49,12 +49,12 @@ for i = 1:N
         pair = pair + 1;
     end
 end
-interdistances = inf(ndist, n); % Array of interdistances
+interdistances = inf(ndist, iterations); % Array of interdistances
 segcolors = flip(rainbow(ndist,1));
 % Formation distances errors
-mFormation1 = inf(1,n); % MSE (Mean Square Error) of the distance errors between each robot and its neighbors
+mFormation1 = inf(1,iterations); % MSE (Mean Square Error) of the distance errors between each robot and its neighbors
 % Computation time
-computationTime = inf(1,n);
+computationTime = inf(1,iterations);
 
 %% Metrics
 formationThresh = 0.33; % Admissible error, equivalent to a mean error of sqrt(0.25)=0.5;

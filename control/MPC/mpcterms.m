@@ -1,4 +1,4 @@
-function [Phi_Phi, Phi_F, Phi_Rs, Phi, A, B, C] = mpcterms(Ad, Bd, Cd, Nc, Np)
+function [Phi_Phi, Phi_F, Phi_Rs, Phi, F, A, B, C] = mpcterms(Ad, Bd, Cd, Nc, Np)
     %
     %
 

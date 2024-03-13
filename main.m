@@ -1,5 +1,6 @@
 %% Load parameters
-parameters;
+parameters; % Load parameters
+k_final = iterations; % Set the default index representing the end of the simulation
 
 %% Figure
 if(displayType~=0)
@@ -32,7 +33,7 @@ robots{5} = SingleIntegrator(2, initial_positions(:,5), [], [-vlim; vlim], [a_li
 poses = [robots{1}.state, robots{2}.state, robots{3}.state, robots{4}.state, robots{5}.state];
 rcolors = rainbow(N);
 
-%% Architecture
+%% Communication architecture
 d1 = 1;
 L = vshapeWeightedGL(N, d1); % Topology matrix representing the formation
 topology = L;
@@ -76,7 +77,11 @@ if(controller == Controllers.CentralizedConsensusMPC)
     Nc = 5;
     Np = 50;
     R = 1;
-    MPCPointFollowingSI = createMPCPointFollowingSI(poses(:,1), Nc, Np, time_step);
+    ulim = [-5 5];
+    dulim = [-5 5];
+    xlim = [];
+    ylim = [];
+    MPCPointFollowingSI = createMPCPointFollowingSI(poses(:,1), Nc, Np, ulim, dulim, xlim, ylim, time_step);
 end
 
 %% Loop

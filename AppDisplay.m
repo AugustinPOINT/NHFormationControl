@@ -10,7 +10,7 @@ classdef AppDisplay < matlab.apps.AppBase
     end
 
     properties (Constant)
-        marginX = 50;
+        marginX = 60;
         marginY = 50; %130
     end
 
@@ -26,21 +26,21 @@ classdef AppDisplay < matlab.apps.AppBase
             %app.UIFigure.Position = [0 0 1350 750];
             app.UIFigure.Name = 'Simulator Vxx';
             app.UIFigure.WindowState = 'maximized';
-            app.middle = app.UIFigure.Position(3:4)/2 + [165 0];
+            app.middle = app.UIFigure.Position(3:4)/2 + [175 0];
 
             % Create mainAxis
             app.mainAxis = axes(app.UIFigure);
-            title(app.mainAxis, 'Simulation');
-            xlabel(app.mainAxis, 'X (m)');
-            ylabel(app.mainAxis, 'Y (m)');
+            title(app.mainAxis, "Simulation", "FontSize", 20);
+            xlabel(app.mainAxis, 'X (m)', 'FontSize', 20);
+            ylabel(app.mainAxis, 'Y (m)', 'FontSize', 20);
             %zlabel(app.mainAxis, 'Z (m)');
             app.mainAxis.Units = "pixels";
             app.mainAxis.Position = [app.marginX (app.UIFigure.Position(4)-app.middle(1)+2*app.marginX)/2 app.middle(1)-2*app.marginX app.middle(1)-2*app.marginX];
-            app.mainAxis.XLim = [-20 20];
-            app.mainAxis.YLim = [-20 20];
+            app.mainAxis.XLim = [-21 21];
+            app.mainAxis.YLim = [-21 21];
             hold(app.mainAxis, "on");
             grid(app.mainAxis, "on");
-            %axis(app.mainAxis, "equal");
+            axis(app.mainAxis, "equal");
 
             % Create plotAxis1
             app.plotAxis1 = axes(app.UIFigure);
@@ -100,8 +100,8 @@ classdef AppDisplay < matlab.apps.AppBase
         function clearAll(app)
             
             cla(app.mainAxis);
-            app.mainAxis.XLim = [-20 20];
-            app.mainAxis.YLim = [-20 20];
+            app.mainAxis.XLim = [-21 19];
+            app.mainAxis.YLim = [-11 16];
             cla(app.plotAxis1);
             app.plotAxis1.XLim = [0 2.5];
             app.plotAxis1.YLim = [-10 10];

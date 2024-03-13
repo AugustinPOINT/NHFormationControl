@@ -2,29 +2,35 @@
 parameters;
 
 %% Figure
-if(~exist("app","var") || ~isvalid(app))
-    app = AppDisplay;
+if(displayType~=0)
+    if(~exist("app","var") || ~isvalid(app))
+        app = AppDisplay;
+    end
+    app.clearAll();
 end
-app.clearAll();
 
 %% Define the trajectory
-p1 = [-17; -13];
+p1 = [-17; -5];
 p2 = [17; 13];
-trajectory = [p1 [-12; 0] [-5; 2] [5; 0] [10; -2] [15; 0] p2];
-polyline = createPolylineParametrization(trajectory, 2);
+trajectory = [p1 [-12; 5] [-5; 7] [0; 3.5] [6; 5] [12; 3.5] [15; 5] p2];
+xx = (p1(1):0.1:p2(1));
+yy = spline(trajectory(1,:), trajectory(2,:), xx);
+spl = [xx; yy];
+polyline = createPolylineParametrization(spl, 3);
 % Todo : allow user to change the trajectory on the UI with left-click to add points, right-click to remove
 
 %% Robot(s)
 vlim = 7.5;
 a_lim = 15;
 robots = {};
-robots{1} = SingleIntegrator(2, [-16; -14], [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{2} = SingleIntegrator(2, [-12; -17], [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{3} = SingleIntegrator(2, [ -8; -17], [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{4} = SingleIntegrator(2, [-10; -15], [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{5} = SingleIntegrator(2, [-10; -19], [], [-vlim; vlim], [a_lim; a_lim], time_step);
+initial_positions = [-14+2*cos(linspace(pi/3,2*pi+pi/3,N+1)); -8+2*sin(linspace(pi/3,2*pi+pi/3,N+1))];
+robots{1} = SingleIntegrator(2, initial_positions(:,1), [], [-vlim; vlim], [inf; inf], time_step); %[-16; -14]
+robots{2} = SingleIntegrator(2, initial_positions(:,2), [], [-vlim; vlim], [a_lim; a_lim], time_step);
+robots{3} = SingleIntegrator(2, initial_positions(:,3), [], [-vlim; vlim], [a_lim; a_lim], time_step);
+robots{4} = SingleIntegrator(2, initial_positions(:,4), [], [-vlim; vlim], [a_lim; a_lim], time_step);
+robots{5} = SingleIntegrator(2, initial_positions(:,5), [], [-vlim; vlim], [a_lim; a_lim], time_step);
 poses = [robots{1}.state, robots{2}.state, robots{3}.state, robots{4}.state, robots{5}.state];
-rcolors = rainbow(N,1);
+rcolors = rainbow(N);
 
 %% Architecture
 d1 = 1;
@@ -65,22 +71,38 @@ controls = cell(1,N);
 clear feedbackControlSI;
 clear feedbackControlDI;
 % Choice of the controller
-controller = Controllers.CentralizedConsensus;
+controller = Controllers.CentralizedConsensusMPC;
+if(controller == Controllers.CentralizedConsensusMPC)
+    Nc = 5;
+    Np = 50;
+    R = 1;
+    MPCPointFollowingSI = createMPCPointFollowingSI(poses(:,1), Nc, Np, time_step);
+end
 
 %% Loop
 for k = 1:iterations
     tic;
     t = k * time_step;
     
-    %% Define the trajectory
-    w = polyline(t);
-    
     %% Compute the controls
     switch(controller)
-        case Controllers.CentralizedConsensus
-            %
-            u = centralizedFormationControl(poses, L);
+        case Controllers.CentralizedConsensusFeedback
+            % Compute Leader controls
+            w = polyline(t);
             uLead = feedbackControlSI(poses(:,1), w, time_step);
+            % Compute Followers controls
+            u = centralizedFormationControl(poses, L);
+            % Format controls
+            controls = mat2cell(u,2,ones(1,size(u,2)));
+            controls(:,1) = {uLead};
+        case Controllers.CentralizedConsensusMPC
+            % Compute Leader controls
+            w = polyline(linspace(t,t+Np*time_step,Np));
+            %w = polyline(t);
+            uLead = MPCPointFollowingSI(poses(:,1), R, w(:,1:Np));
+            % Compute Followers controls
+            u = centralizedFormationControl(poses, L);
+            % Format controls
             controls = mat2cell(u,2,ones(1,size(u,2)));
             controls(:,1) = {uLead};
         case Controllers.LeaderSIStandalone
@@ -97,7 +119,7 @@ for k = 1:iterations
             %
             controls(:) = {[0;0]};
     end
-    
+
     %% Set the controls
     for r = 1:N
         robots{r}.SetInput(controls{:,r});
@@ -113,7 +135,7 @@ for k = 1:iterations
     end
 
     %% Compute the distance MSE
-    mFormation1(1,k) = mean((interdistances_des(:)-interdistances(:,k)).^2);
+    mFormation1(1,k) = mean(abs(interdistances_des(:)-interdistances(:,k)));
 
     %% Update the robot state
     for r = 1:N
@@ -127,42 +149,69 @@ for k = 1:iterations
         k_final = k;
         break;
     end
-    
+
+    %% Compute the computation time before the display
+    computationTime(1,k) = toc;
+
     %% Update the display
-    % Main
-    cla(app.mainAxis);
-    drawIntegrator(app.mainAxis, w(:,1), 0.15, 'g');
-    drawTrajectory(app.mainAxis, trajectory);
-    drawTarget(app.mainAxis, p1, [], [], 1);
-    drawTarget(app.mainAxis, p2, [], [], 1);
-    for r = 1:N
-        drawIntegrator(app.mainAxis, robots{r}.state, 0.3, rcolors(r));
-        text(app.mainAxis, robots{r}.state(1)-0.35, robots{r}.state(2)+0.6, sprintf('R%d', r));
+    if(displayType==1 || (displayType==2 && k == 1))
+        % Main
+        if(displayType == 2)
+            title(app.mainAxis, "Snapshots des positions de la formation le long de la trajectoire");
+        end
+        cla(app.mainAxis);
+        drawIntegrator(app.mainAxis, w(:,1), 0.15, 'g');
+        drawTrajectory(app.mainAxis, spl);
+        drawTrajectory(app.mainAxis, trajectory, "black", [], 'none', "none");
+        drawTarget(app.mainAxis, p1, [], [], 1);
+        text(app.mainAxis, p1(1)-3, p1(2)+2, sprintf('Début'), "Color", "green", "FontSize", 20);
+        drawTarget(app.mainAxis, p2, [], [], 1);
+        text(app.mainAxis, p2(1)-1, p2(2)+2, sprintf('Fin'), "Color", "green", "FontSize", 20);
+        for r = 1:N
+            drawIntegrator(app.mainAxis, poses(:,r), 0.3, rcolors(r));
+            text(app.mainAxis, poses(1,r)-0.35, poses(2,r)+0.6, sprintf('R%d', r));
+        end
+        % for r = 1:size(rows,1)
+        %     drawArrow(app.mainAxis, poses(:,rows(r)), poses(:,cols(r)), 0.15, 0.3);
+        % end
+        % Interdistances
+        cla(app.plotAxis1);
+        for i = 1:ndist
+            plot(app.plotAxis1, (1:k)*time_step, interdistances_des(i)-interdistances(i,1:k), "Color", segcolors(i), "LineStyle", "--");
+        end
+        if(mod(k, floor(2/time_step)) == 0) % Update the XLim axis every 2 seconds (in simulation time)
+            app.plotAxis1.XLim = app.plotAxis1.XLim + [0 2];
+        end
+        % Formation error
+        plot(app.plotAxis1, (1:k)*time_step, mFormation1(1,1:k), "Color", "r", "LineWidth", 1.5);
+        plot(app.plotAxis1, app.plotAxis1.XLim, [0, 0], "Color", "black", "LineStyle", "-", "LineWidth", 1);
+        plot(app.plotAxis1, app.plotAxis1.XLim, [formationThresh, formationThresh], "Color", "black", "LineStyle", "-.", "LineWidth", 1);
     end
-    for r = 1:size(rows,1)
-        drawArrow(app.mainAxis, poses(:,rows(r)), poses(:,cols(r)), 0.15, 0.3);
+    if(displayType == 2)
+        if(floor(mod(k-1, time_capture/time_step)+1e-13)==0) % Every 5 seconds (simulation time)
+            text(app.mainAxis, mean(poses(1,:))-1, max(poses(2,:))+2, sprintf('t=%ds', floor((k+1)*time_step)), "FontSize", 20);
+            for r = 1:N
+                drawIntegrator(app.mainAxis, poses(:,r), 0.3, rcolors(r));
+                text(app.mainAxis, poses(1,r)-0.35, poses(2,r)+0.6, sprintf('R%d', r));
+            end
+            % for r = 1:size(rows,1)
+            %     drawArrow(app.mainAxis, poses(:,rows(r)), poses(:,cols(r)), 0.15, 0.3);
+            % end
+        end
     end
-    % Interdistances
-    cla(app.plotAxis1);
-    for i = 1:ndist
-        plot(app.plotAxis1, (1:k)*time_step, interdistances_des(i)-interdistances(i,1:k), "Color", segcolors(i), "LineStyle", "--");
-    end
-    if(mod(k, floor(2/time_step)) == 0) % Update the XLim axis every 2 seconds (in simulation time)
-        app.plotAxis1.XLim = app.plotAxis1.XLim + [0 2];
-    end
-    % Formation error
-    plot(app.plotAxis1, (1:k)*time_step, mFormation1(1,1:k), "Color", "r", "LineWidth", 1.5);
-    plot(app.plotAxis1, app.plotAxis1.XLim, [0, 0], "Color", "black", "LineStyle", "-", "LineWidth", 1);
-    plot(app.plotAxis1, app.plotAxis1.XLim, [formationThresh, formationThresh], "Color", "black", "LineStyle", "-.", "LineWidth", 1);
 
     ttoc = toc;
-    computationTime(1,k) = ttoc;
     delta_t = max(time_step-ttoc,0);
     %pause(delta_t);
     drawnow();
 end
 
-mConvergence = find(mFormation1(1:k_final)<formationThresh,1); % Time until first formation
-mStability = 100*sum(mFormation1(1:k_final)<formationThresh)/k_final; % Percentage of time spent in formation
-mStability2 = 100*sum(mFormation1(mConvergence:k_final)<formationThresh)/(k_final-mConvergence+1); % Percentage of time spent in formation after convergence
-mComplexity = mean(computationTime(1:k_final-1));
+%% Global simulation metrics
+mConvergence1 = find(mFormation1(1:k_final)<formationThresh,1); % Time until first formation (in number of iterations)
+mConvergence2 = find(mFormation1(1:k_final)<formationThresh,1)*time_step; % Time until first formation (in seconds)
+if(isempty(mConvergence1)), mConvergence1 = k_final; mConvergence2 = k_final*time_step; end
+mStability1 = 100*sum(mFormation1(1:k_final)<formationThresh)/k_final; % Percentage of time spent in formation
+mStability2 = 100*sum(mFormation1(mConvergence1:k_final)<formationThresh)/(k_final-mConvergence1+1); % Percentage of time spent in formation after convergence
+mComplexity = mean(computationTime(1:k_final-1)); % Mean computation time each iteration
+metrics = [["Convergence time (s)"; num2str(mConvergence2)], ["Stability 1 (% of time)"; num2str(mStability1)], ["Stability 2 (% of time)"; num2str(mStability2)], ["Complexity (s)"; num2str(mComplexity)]];
+%disp(metrics);

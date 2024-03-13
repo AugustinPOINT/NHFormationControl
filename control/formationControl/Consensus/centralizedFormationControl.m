@@ -7,6 +7,8 @@ function [controls, actualL] = centralizedFormationControl(poses, L, u)
     %% Compute the robots controls
     gmax = 10;
     gmin = 1;
+    global g;
+    g = 4;
     
     controls(:,:) = zeros(size(poses));
     
@@ -17,7 +19,7 @@ function [controls, actualL] = centralizedFormationControl(poses, L, u)
         for j = neighbors
             dij = norm(poses(1:2, j) - poses(1:2, i));
             gain = sin(atan(abs(dij^2 - L(i,j)^2)/5))*(gmax-gmin)+(gmax-(gmax-gmin));
-            controls(:, i) = controls(:, i) + gain * (dij^2 - L(i,j)^2) * (poses(1:2, j) - poses(1:2, i))/dij;
+            controls(:, i) = controls(:, i) + g * (dij^2 - L(i,j)^2) * (poses(1:2, j) - poses(1:2, i))/dij;
             actualL(i,j) = -dij;
             actualL(j,i) = -dij;
         end

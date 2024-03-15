@@ -15,6 +15,16 @@ function polyline = createPolylineParametrization(points_, rate)
         repCumSumLength = repmat(cumSegLenghts, N, 1);
         [maxVal, seg] = max(t < repCumSumLength'); % Index of the segment t belongs to
         seg = seg - 1;
+        % if(maxVal == 0) % The parameter is higher than the polyline total length
+        %     w = [points(:,end) zeros(2,2)];
+        % else
+        %     dSeg = cumSegLenghts(seg+1)-cumSegLenghts(seg);
+        %     w_ = points(:,seg) + (t-cumSegLenghts(seg))*(points(:,seg+1)-points(:,seg))./dSeg;
+        %     vec = points(:,seg+1)-points(:,seg);
+        %     wd_ = rate*vec/norm(vec);
+        %     wdd_ = zeros(2,1);
+        %     wb = [w_ wd_ wdd_];
+        % end
         seg(maxVal == 0) = size(points,2)-1; % If the point crosses the total path length, we associate it the last segment
         %% Computation of an interpolation parameter k, for each t
         k = (t-cumSegLenghts(seg))./segLenghts(seg);

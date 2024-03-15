@@ -17,12 +17,12 @@ trajectory = [p1 [-12; 5] [-5; 7] [0; 3.5] [6; 5] [12; 3.5] [15; 5] p2];
 xx = (p1(1):0.1:p2(1));
 yy = spline(trajectory(1,:), trajectory(2,:), xx);
 spl = [xx; yy];
-polyline = createPolylineParametrization(spl, 3);
+polyline = createPolylineParametrization(spl, 2);
 % Todo : allow user to change the trajectory on the UI with left-click to add points, right-click to remove
 
 %% Robot(s)
 vlim = 7.5;
-a_lim = 15;
+a_lim = inf;
 robots = {};
 initial_positions = [-14+2*cos(linspace(pi/3,2*pi+pi/3,N+1)); -8+2*sin(linspace(pi/3,2*pi+pi/3,N+1))];
 robots{1} = SingleIntegrator(2, initial_positions(:,1), [], [-vlim; vlim], [inf; inf], time_step); %[-16; -14]
@@ -72,7 +72,7 @@ controls = cell(1,N);
 clear feedbackControlSI;
 clear feedbackControlDI;
 % Choice of the controller
-controller = Controllers.CentralizedConsensusMPC;
+controller = Controllers.CentralizedConsensusFeedback;
 if(controller == Controllers.CentralizedConsensusMPC)
     Nc = 5;
     Np = 50;

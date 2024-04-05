@@ -8,7 +8,7 @@ function [controls, actualL] = centralizedFormationControl(poses, L, u)
     gmax = 10;
     gmin = 1;
     global g;
-    %g = 4;
+    g = 4;
     
     controls(:,:) = zeros(size(poses));
     

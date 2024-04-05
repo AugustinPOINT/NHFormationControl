@@ -1,5 +1,5 @@
 classdef Controllers
     enumeration
-        CentralizedConsensusFeedback, CentralizedConsensusMPC, LeaderSIStandalone, LeaderDIStandalone
+        LeaderFeedbackFollowersGraph, LeaderMPCFollowersGraph, LeaderMPCFollowersCMPC
     end    
 end

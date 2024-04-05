@@ -1,3 +1,4 @@
+clear all except app;
 %% Load parameters
 parameters; % Load parameters
 k_final = iterations; % Set the default index representing the end of the simulation
@@ -24,20 +25,18 @@ polyline = createPolylineParametrization(spl, 2);
 vlim = 7.5;
 a_lim = inf;
 robots = {};
+poses = zeros(2,N);
 initial_positions = [-14+2*cos(linspace(pi/3,2*pi+pi/3,N+1)); -8+2*sin(linspace(pi/3,2*pi+pi/3,N+1))];
-robots{1} = SingleIntegrator(2, initial_positions(:,1), [], [-vlim; vlim], [inf; inf], time_step); %[-16; -14]
-robots{2} = SingleIntegrator(2, initial_positions(:,2), [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{3} = SingleIntegrator(2, initial_positions(:,3), [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{4} = SingleIntegrator(2, initial_positions(:,4), [], [-vlim; vlim], [a_lim; a_lim], time_step);
-robots{5} = SingleIntegrator(2, initial_positions(:,5), [], [-vlim; vlim], [a_lim; a_lim], time_step);
-poses = [robots{1}.state, robots{2}.state, robots{3}.state, robots{4}.state, robots{5}.state];
-rcolors = rainbow(N);
+for i = 1:N
+    robots{i} = SingleIntegrator(2, initial_positions(:,i), [], [-vlim; vlim], [a_lim; a_lim], time_step);
+    poses(:,i) = robots{i}.state;
+end
+rcolors = rainbow(max(N, 4));
 
 %% Communication architecture
 d1 = 1;
-L = vshapeWeightedGL(N, d1); % Topology matrix representing the formation
-topology = L;
-[rows, cols] = find(topology < 0);
+[Topology, Incidence, Weights, des_Topology] = vshapeGL(N, d1); % Topology representing the formation for 5 robots
+[rows, cols] = find(Topology < 0);
 
 %% Saved data
 % Trajectories
@@ -47,12 +46,11 @@ for r = 1:N
 end
 % Interdistances
 ndist = N*(N-1)/2;
-interdistances_mat = -completeVshapeGL5(d1); % Matrix of desired interdistances
 interdistances_des = zeros(ndist,1); % Array of desired interdistances
 pair = 1;
 for i = 1:N
     for j = i+1:N
-        interdistances_des(pair) = interdistances_mat(i,j);
+        interdistances_des(pair) = des_Topology(i,j);
         pair = pair + 1;
     end
 end
@@ -67,21 +65,40 @@ computationTime = inf(1,iterations);
 formationThresh = 0.33; % Admissible error, equivalent to a mean error of sqrt(0.25)=0.5;
 
 %% Controllers
+% Initialize control saving arrays
 controls = cell(1,N);
+for i = 1:N
+    controls{i} = zeros(2,iterations);
+end
 % Reset the integral terms
 clear feedbackControlSI;
 clear feedbackControlDI;
+clear NLMPC;
 % Choice of the controller
-controller = Controllers.CentralizedConsensusFeedback;
-if(controller == Controllers.CentralizedConsensusMPC)
-    Nc = 5;
-    Np = 50;
-    R = 1;
-    ulim = [-5 5];
-    dulim = [-5 5];
-    xlim = [];
-    ylim = [];
-    MPCPointFollowingSI = createMPCPointFollowingSI(poses(:,1), Nc, Np, ulim, dulim, xlim, ylim, time_step);
+controller = Controllers.LeaderMPCFollowersCMPC;
+if(controller == Controllers.LeaderMPCFollowersCMPC || controller == Controllers.LeaderMPCFollowersGraph)
+    % Initialize the Leader MPC variables
+    NcLeader = 5;
+    NpLeader = 30;
+    RLeader = 1;
+    ulimLeader = [-5 5];
+    dulimLeader = [-5 5];
+    xlimLeader = [];
+    ylimLeader = [];
+    MPCPointFollowingSI = createMPCPointFollowingSI(poses(:,1), NcLeader, NpLeader, ulimLeader, dulimLeader, xlimLeader, ylimLeader, time_step);
+end
+if(controller == Controllers.LeaderMPCFollowersCMPC)
+    % Initialize the Followers CMPC variables
+    NcFollow = 3;
+    NpFollow = 10;
+    Wo = 10*eye(size(Incidence,2));
+    Wi = 0.1*eye(2*N);
+    Wt = 0*eye(size(Incidence,2));
+    ulimFollow = [];
+    dulimFollow = [];
+    xlimFollow = [];
+    ylimFollow = [];
+    u0 = zeros(2*N,1); % Initialization variable for the optimization
 end
 
 %% Loop
@@ -89,45 +106,59 @@ for k = 1:iterations
     tic;
     t = k * time_step;
     
+    %DMPC(poses);
+
     %% Compute the controls
     switch(controller)
-        case Controllers.CentralizedConsensusFeedback
+        case Controllers.LeaderFeedbackFollowersGraph
+            % Centralized formation control with graph theory and trajectory following with feedback linearization
             % Compute Leader controls
             w = polyline(t);
             uLead = feedbackControlSI(poses(:,1), w, time_step);
             % Compute Followers controls
-            u = centralizedFormationControl(poses, L);
-            % Format controls
-            controls = mat2cell(u,2,ones(1,size(u,2)));
-            controls(:,1) = {uLead};
-        case Controllers.CentralizedConsensusMPC
+            uFollow = centralizedFormationControl(poses, Topology);
+            % Save control signals
+            controls{1}(:,k) = uLead;
+            for i = 2:N
+                controls{i}(:,k) = uFollow(:,i);
+            end
+        case Controllers.LeaderMPCFollowersGraph
+            % Centralized formation control with graph theory and trajectory following with MPC
             % Compute Leader controls
-            w = polyline(linspace(t,t+Np*time_step,Np));
-            %w = polyline(t);
-            uLead = MPCPointFollowingSI(poses(:,1), R, w(:,1:Np));
+            %w = polyline(linspace(t,t+Np*time_step,Np));
+            %uLead = MPCPointFollowingSI(poses(:,1), R, w(:,1:Np));
+            w = polyline(t);
+            uLead = MPCPointFollowingSI(poses(:,1), RLeader, w(:,1));
             % Compute Followers controls
-            u = centralizedFormationControl(poses, L);
-            % Format controls
-            controls = mat2cell(u,2,ones(1,size(u,2)));
-            controls(:,1) = {uLead};
-        case Controllers.LeaderSIStandalone
-            %
-            controls(:) = {[0;0]};
-            u = feedbackControlSI(poses(:,1), w, time_step);
-            controls(:,1) = {u};
-        case Controllers.LeaderDIStandalone
-            %
-            controls(:) = {[0;0]};
-            u = feedbackControlDI(poses(:,1), w, time_step);
-            controls(:,1) = {u};
+            uFollow = centralizedFormationControl(poses, Incidence);
+            % Save control signals
+            controls{1}(:,k) = uLead;
+            for i = 2:N
+                controls{i}(:,k) = uFollow(:,i);
+            end
+        case Controllers.LeaderMPCFollowersCMPC
+            % Centralized formation control with MPC optimization and trajectory following with MPC
+            % Compute Leader controls
+            w = polyline(t);
+            uLead = MPCPointFollowingSI(poses(:,1), RLeader, w(:,1));
+            % Compute Followers controls
+            uFollow = NLMPC(reshape(poses, 2*N, 1), u0, Incidence, Weights, NcFollow, NpFollow, Wo, Wi, Wt, ulimFollow, dulimFollow, xlimFollow, ylimFollow, time_step);
+            uFollow = reshape(uFollow, 2, N);
+            % Save control signals
+            controls{1}(:,k) = uLead;
+            for i = 2:N
+                controls{i}(:,k) = uFollow(:,i);
+            end
         otherwise
-            %
-            controls(:) = {[0;0]};
+            % Save control signals
+            for i = 1:N
+                controls{i}(:,k) = [0;0];
+            end
     end
 
     %% Set the controls
     for r = 1:N
-        robots{r}.SetInput(controls{:,r});
+        robots{r}.SetInput(controls{r}(:,k));
     end
 
     %% Compute the interdistances
@@ -180,17 +211,31 @@ for k = 1:iterations
         %     drawArrow(app.mainAxis, poses(:,rows(r)), poses(:,cols(r)), 0.15, 0.3);
         % end
         % Interdistances
-        cla(app.plotAxis1);
+        cla(app.distErrors);
         for i = 1:ndist
-            plot(app.plotAxis1, (1:k)*time_step, interdistances_des(i)-interdistances(i,1:k), "Color", segcolors(i), "LineStyle", "--");
+            plot(app.distErrors, (1:k)*time_step, interdistances_des(i)-interdistances(i,1:k), "Color", segcolors(i), "LineStyle", "--");
         end
         if(mod(k, floor(2/time_step)) == 0) % Update the XLim axis every 2 seconds (in simulation time)
-            app.plotAxis1.XLim = app.plotAxis1.XLim + [0 2];
+            app.distErrors.XLim = app.distErrors.XLim + [0 2];
         end
         % Formation error
-        plot(app.plotAxis1, (1:k)*time_step, mFormation1(1,1:k), "Color", "r", "LineWidth", 1.5);
-        plot(app.plotAxis1, app.plotAxis1.XLim, [0, 0], "Color", "black", "LineStyle", "-", "LineWidth", 1);
-        plot(app.plotAxis1, app.plotAxis1.XLim, [formationThresh, formationThresh], "Color", "black", "LineStyle", "-.", "LineWidth", 1);
+        plot(app.distErrors, (1:k)*time_step, mFormation1(1,1:k), "Color", "r", "LineWidth", 1.5);
+        plot(app.distErrors, app.distErrors.XLim, [0, 0], "Color", "black", "LineStyle", "-", "LineWidth", 1);
+        plot(app.distErrors, app.distErrors.XLim, [formationThresh, formationThresh], "Color", "black", "LineStyle", "-.", "LineWidth", 1);
+        set(app.distErrors.Children, 'Visible', app.distErrors.Visible); % Set visibility to that of the axis
+        % Inputs
+        cla(app.inputSignals);
+        if(mod(k, floor(2/time_step)) == 0) % Update the XLim axis every 2 seconds (in simulation time)
+            app.inputSignals.XLim = app.inputSignals.XLim + [0 2];
+        end
+        for r = 1:N
+            plot(app.inputSignals, (1:k)*time_step, controls{r}(1,1:k), "Color", rcolors(r), "LineStyle", "--");
+            plot(app.inputSignals, (1:k)*time_step, controls{r}(2,1:k), "Color", rcolors(r), "LineStyle", "-.");
+        end
+        plot(app.inputSignals, [], [], "Color", "black", "LineStyle", "--");
+        plot(app.inputSignals, [], [], "Color", "black", "LineStyle", ".-");
+        legend(app.inputSignals, "ux input signals", "ux input signals");
+        set(app.inputSignals.Children, 'Visible', app.inputSignals.Visible); % Set visibility to that of the axis
     end
     if(displayType == 2)
         if(floor(mod(k-1, time_capture/time_step)+1e-13)==0) % Every 5 seconds (simulation time)

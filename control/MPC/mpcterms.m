@@ -1,23 +1,33 @@
-function [Phi_Phi, Phi_F, Phi_Rs, Phi, F, A, B, C] = mpcterms(Ad, Bd, Cd, Nc, Np)
+function [Phi_Phi, Phi_F, Phi_Rs, Phi, F, A, B, C] = mpcterms(Ad, Bd, Cd, Nc, Np, augment)
     %
     %
+    if(~exist("augment", "var") || isempty(augment)); augment = true; end
 
-    %% Compute the augmented state-space model
-    % System constants and variables
-    [no, n] = size(Cd);
-    [n, ni] = size(Bd);
-    % Computation of the augmented model
-    A = eye(n+no,n+no);
-    A(1:n,1:n) = Ad;
-    A(n+1:n+no,1:n) = Cd*Ad;
-    B = zeros(n+no,ni);
-    B(1:n,1:ni) = Bd;
-    B(n+1:n+no,1:ni) = Cd*Bd;
-    C = zeros(no,n+no);
-    C(:,n+1:n+no) = eye(no,no);
+    if(augment)
+        %% Compute the augmented state-space model
+        % System constants and variables
+        [no, n] = size(Cd);
+        [n, ni] = size(Bd);
+        % Computation of the augmented model
+        A = eye(n+no,n+no);
+        A(1:n,1:n) = Ad;
+        A(n+1:n+no,1:n) = Cd*Ad;
+        B = zeros(n+no,ni);
+        B(1:n,1:ni) = Bd;
+        B(n+1:n+no,1:ni) = Cd*Bd;
+        C = zeros(no,n+no);
+        C(:,n+1:n+no) = eye(no,no);
+        m = n + no;
+    else
+        [no, n] = size(Cd);
+        [n, ni] = size(Bd);
+        A = Ad;
+        B = Bd;
+        C = Cd;
+        m = n;
+    end
 
     %% Compute the desired matrices
-    m = n + no;
     F = zeros(Np*no,m);
     F(1:no,:) = C*A;
     Phi = zeros(Np*no,Nc*ni);
